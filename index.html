@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOCK - Monetiza tu portón. Asegura tu lugar.</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="https://imgur.com/uaVmfzb.png">
+  <meta name="description" content="DOCK es la plataforma escrow de estacionamiento privado en la CDMX. Renta tu cochera o encuentra un lugar seguro al instante.">
+</head>
+<body>
+  <!-- Firebase Database Status Banner -->
+  <div class="db-status-banner" id="dbStatusBanner">
+    📡 CONECTANDO CON FIREBASE...
+  </div>
+
+  <header>
+    <a href="#" class="logo-container">
+      <img src="https://imgur.com/uaVmfzb.png" alt="DOCK Logo" class="logo-img">
+      <span class="logo-text">DOCK<span>.</span></span>
+    </a>
+    <div class="nav-user">
+      <div class="user-badge">
+        <span class="badge-dot"></span>
+        <span>CDMX ACTIVO</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <img src="https://imgur.com/aBwA2YJ.png" alt="DOCK App Logo" class="hero-logo">
+    <h1>Monetiza tu portón. <span>Asegura tu lugar.</span></h1>
+    <p>La red de estacionamiento privado y descentralizado con custodia de fondos en garantía más segura de la Ciudad de México.</p>
+  </section>
+
+  <main class="container">
+    <div class="grid-2">
+      <!-- Docker Card -->
+      <div class="card" onclick="openAuth('docker')">
+        <div class="role-icon">🔑</div>
+        <h2 class="card-title">Ser Docker</h2>
+        <p class="card-desc">Monetiza tu cochera, portón o espacio libre. Define tus tarifas y fracciona tus horas. Los conductores pagan en custodia antes de llegar.</p>
+        <button class="btn btn-primary">Comenzar a Rentar</button>
+      </div>
+
+      <!-- Driver Card -->
+      <div class="card" onclick="openAuth('driver')">
+        <div class="role-icon">🚗</div>
+        <h2 class="card-title">Ser Driver</h2>
+        <p class="card-desc">Encuentra portones y cajones privados en CDMX en tiempo real. Paga de forma segura en garantía y evita multas, grúas o cristalazos.</p>
+        <button class="btn btn-secondary">Buscar Estacionamiento</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Auth Gateway Modal -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-modal">
+      <button class="close-modal" onclick="closeAuth()">&times;</button>
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <img src="https://imgur.com/uaVmfzb.png" alt="DOCK Logo" style="height: 50px; margin-bottom: 0.5rem;">
+        <h2 style="font-weight: 800; text-transform: uppercase; letter-spacing: 1px; font-size: 1.5rem;">Terminal DOCK</h2>
+        <p style="color: var(--gray); font-size: 0.85rem; margin-top: 0.25rem;" id="authRoleText">Únete a la red descentralizada de CDMX</p>
+      </div>
+      
+      <form id="authForm" onsubmit="handleAuth(event)">
+        <div class="form-group">
+          <label class="form-label" for="userPhone">Número de Teléfono (10 dígitos)</label>
+          <input class="form-input" type="tel" id="userPhone" placeholder="Ej. 5512345678" pattern="[0-9]{10}" required>
+          <p style="font-size: 0.75rem; color: var(--gray); margin-top: 0.25rem;">Servirá como identificador único de cuenta en Firestore.</p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="userName">Nombre Completo</label>
+          <input class="form-input" type="text" id="userName" placeholder="Ej. Luis Roberto" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">Acceder a la Red</button>
+      </form>
+      
+      <div class="legal-card" style="margin-top: 1.5rem; padding: 1rem; border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.02);">
+        <p class="legal-text" style="font-size: 0.75rem; color: var(--gray); line-height: 1.4;">
+          Al registrarte, confirmas conocer y aceptar las directrices de retiro de vehículos por grúa CDMX tras el límite estricto de 10 minutos de tolerancia.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 DOCK Technologies. CDMX, México. Todos los derechos reservados.</p>
+    <div class="footer-links">
+      <a href="#" class="footer-link">Soporte Escrow</a>
+      <a href="#" class="footer-link">Términos de CDMX</a>
+      <a href="#" class="footer-link">Seguridad Descentralizada</a>
+    </div>
+  </footer>
+
+  <!-- Firebase Scripts (Modular SDK v10 via CDN) -->
+  <script type="module">
+    import { db } from "./firebase-config.js";
+    import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    let isMock = false;
+
+    // Test configuration values
+    try {
+      if (!db || !db.app || db.app.options.apiKey === "YOUR_API_KEY_HERE") {
+        throw new Error("No configured keys");
+      }
+      document.getElementById('dbStatusBanner').innerText = "📡 CONECTADO A FIRESTORE (gowash-5e31a)";
+      document.getElementById('dbStatusBanner').style.background = "rgba(15, 255, 161, 0.1)";
+      document.getElementById('dbStatusBanner').style.color = "var(--neon)";
+    } catch (err) {
+      setupMockFirestore();
+    }
+
+    // --- FIRESTORE MOCK SYSTEM FOR LOCALHOST / GITHUB PAGES ---
+    function setupMockFirestore() {
+      isMock = true;
+      document.getElementById('dbStatusBanner').innerText = "⚡ MODO SIMULADOR LOCAL (LocalStorage fallback)";
+      document.getElementById('dbStatusBanner').className = "db-status-banner mock";
+
+      // Mock DB methods matching modular Firestore SDK
+      window.mockFirestore = {
+        getDoc: async (docRef) => {
+          const key = `mock_fs_${docRef.path}`;
+          const val = localStorage.getItem(key);
+          return {
+            exists: () => !!val,
+            data: () => val ? JSON.parse(val) : null
+          };
+        },
+        setDoc: async (docRef, data) => {
+          const key = `mock_fs_${docRef.path}`;
+          localStorage.setItem(key, JSON.stringify(data));
+          return true;
+        }
+      };
+    }
+
+    // Check existing session on load
+    window.addEventListener("DOMContentLoaded", () => {
+      const activeUser = localStorage.getItem("dock_phone");
+      const activeRole = localStorage.getItem("dock_role");
+      if (activeUser && activeRole) {
+        redirectToDashboard(activeRole);
+      }
+    });
+
+    let selectedRole = '';
+
+    window.openAuth = function(role) {
+      selectedRole = role;
+      document.getElementById('authOverlay').style.display = 'flex';
+      
+      const roleText = document.getElementById('authRoleText');
+      if (role === 'docker') {
+        roleText.innerText = 'Ser Docker: Ingresa tu información para configurar tus espacios';
+      } else {
+        roleText.innerText = 'Ser Driver: Ingresa tu información para estacionar con custodia';
+      }
+    }
+
+    window.closeAuth = function() {
+      document.getElementById('authOverlay').style.display = 'none';
+    }
+
+    window.handleAuth = async function(event) {
+      event.preventDefault();
+      const phone = document.getElementById('userPhone').value.trim();
+      const name = document.getElementById('userName').value.trim();
+
+      if (!phone || phone.length !== 10) {
+        alert("El número de teléfono debe tener exactamente 10 dígitos.");
+        return;
+      }
+
+      const docPath = `usuarios/${phone}`;
+      
+      try {
+        let userData;
+
+        if (!isMock) {
+          const docRef = doc(db, "usuarios", phone);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            userData = docSnap.data();
+          } else {
+            // For new users, save both flags as true for easy dual-role testing
+            userData = {
+              nombre: name,
+              phone: phone,
+              isDocker: true,
+              isDriver: true,
+              createdAt: serverTimestamp()
+            };
+            await setDoc(docRef, userData);
+          }
+        } else {
+          const docRef = { path: docPath };
+          const docSnap = await window.mockFirestore.getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            userData = docSnap.data();
+          } else {
+            userData = {
+              nombre: name,
+              phone: phone,
+              isDocker: true,
+              isDriver: true,
+              createdAt: Date.now()
+            };
+            await window.mockFirestore.setDoc(docRef, userData);
+          }
+        }
+
+        // Store configuration in local session
+        localStorage.setItem("dock_phone", userData.phone);
+        localStorage.setItem("dock_username", userData.nombre);
+        localStorage.setItem("dock_role", selectedRole);
+        localStorage.setItem("dock_user_isDocker", userData.isDocker ? "true" : "false");
+        localStorage.setItem("dock_user_isDriver", userData.isDriver ? "true" : "false");
+
+        redirectToDashboard(selectedRole);
+
+      } catch (err) {
+        console.error("Auth error: ", err);
+        alert("Error de red o conexión al iniciar sesión. Revisa tu consola.");
+      }
+    }
+
+    function redirectToDashboard(role) {
+      if (role === 'docker') {
+        window.location.href = 'docker-dashboard.html';
+      } else {
+        window.location.href = 'driver-dashboard.html';
+      }
+    }
+  </script>
+</body>
+</html>

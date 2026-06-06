@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal Driver - DOCK</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="https://imgur.com/uaVmfzb.png">
+  <meta name="description" content="Terminal de seguimiento y telemetría de estacionamiento DOCK.">
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo-container">
+      <img src="https://imgur.com/uaVmfzb.png" alt="DOCK Logo" class="logo-img">
+      <span class="logo-text">DOCK<span>.</span></span>
+    </a>
+    <div class="nav-user">
+      <div class="user-badge">
+        <span class="badge-dot" id="roleDot"></span>
+        <span id="navUsername">Cargando...</span>
+      </div>
+      <button class="logout-btn" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <main class="container" style="margin-top: 3rem;">
+    <div class="bento-grid">
+      
+      <!-- Left Column: Settings / Escrow Activation / Telemetry Status -->
+      <div class="bento-card" id="leftCard">
+        <!-- State 1: Inactive Ticket (Payment Hook) -->
+        <div id="paymentHookSection">
+          <h2 class="card-title" style="color: var(--neon); text-transform: uppercase; letter-spacing: 1px;">
+            <span>🛡️</span> Depósito Escrow
+          </h2>
+          <p class="card-desc">Asigna fondos a la garantía temporal antes de ocupar el portón privado. Tu dinero está seguro en custodia digital.</p>
+          
+          <form id="escrowPaymentForm" onsubmit="activateEscrow(event)">
+            <div class="form-group">
+              <label class="form-label">Seleccionar Spot (CDMX)</label>
+              <select class="form-input" id="parkingSpotSelect" required>
+                <option value="cajon-2">Spot #02 - Portón de LuisRo (Roma Norte)</option>
+                <option value="cajon-1">Spot #01 - Portón de Sofía (Polanco)</option>
+                <option value="cajon-3">Spot #03 - Portón de Diego (Condesa)</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Identificador de Vehículo / Placas</label>
+              <input type="text" class="form-input" id="vehiclePlate" placeholder="Ej. Vento Negro (LuisRo) o MX-123-A" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Tiempo Inicial Contratado</label>
+              <select class="form-input" id="parkingDuration" onchange="calculatePrice()" required>
+                <option value="0.05">3 minutos (Simulación Rápida)</option>
+                <option value="1">1 Hora</option>
+                <option value="2">2 Horas</option>
+                <option value="3">3 Horas</option>
+                <option value="4">4 Horas</option>
+              </select>
+            </div>
+
+            <div class="escrow-payment-box">
+              <div class="escrow-title">Total en Custodia</div>
+              <div class="escrow-price" id="displayEscrowPrice">MXN $40<span>.00</span></div>
+              <p style="font-size: 0.75rem; color: var(--gray);">Fondos bloqueados hasta fin de ticket.</p>
+            </div>
+
+            <!-- Bold Un-skippable Legal Compliance Card inside flow -->
+            <div class="legal-card" style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
+              <div class="legal-header">⚠️ AVISO DE RETIRO CON GRÚA (CDMX)</div>
+              <p class="legal-text">
+                DOCK es un software de gestión de espacios privados de mutuo acuerdo. Al confirmar su pago, el Driver acepta que el espacio contratado tiene una tolerancia máxima estricta de 10 minutos posteriores al vencimiento de su tiempo digital. Pasado este límite, el Docker queda legal y contractualmente facultado para solicitar una grúa privada o arrastre vehicular de la Ciudad de México para liberar el libre acceso a su propiedad. Cualquier costo de corralón o arrastre correrá al 100% por cuenta del Driver infractor. DOCK no se hace responsable por daños materiales.
+              </p>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Autorizar & Confirmar Pago</button>
+          </form>
+        </div>
+
+        <!-- State 2: Active Ticket Details -->
+        <div id="activeTicketSection" style="display: none;">
+          <h2 class="card-title" style="color: var(--neon); text-transform: uppercase; letter-spacing: 1px;" id="activeTicketHeader">
+            <span>📡</span> Telemetría de Ticket
+          </h2>
+          <p class="card-desc">Vigilancia activa de tu garantía y tiempo de permanencia en el espacio privado.</p>
+          
+          <table class="details-table">
+            <tr>
+              <td>Spot Seleccionado</td>
+              <td id="infoSpot">Spot #02</td>
+            </tr>
+            <tr>
+              <td>Vehículo / Placa</td>
+              <td id="infoVehicle">Vento Negro</td>
+            </tr>
+            <tr>
+              <td>Monto Custodiado</td>
+              <td id="infoEscrow" style="color: var(--neon);">MXN $40.00</td>
+            </tr>
+            <tr>
+              <td>Límite del Ticket</td>
+              <td id="infoEndTime">00:00:00</td>
+            </tr>
+            <tr>
+              <td>Estado Legal</td>
+              <td id="infoLegalState" style="font-weight: 800; color: var(--neon);">PROTEGIDO</td>
+            </tr>
+          </table>
+
+          <div style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem;">
+            <button class="btn btn-primary" id="btnExtender" onclick="openExtendModal()">Extender Tiempo</button>
+            <p id="extendLockoutWarning" style="color: var(--error); font-size: 0.8rem; text-align: center; display: none; font-weight: 600;">
+              🔒 Extensión bloqueada: Faltan menos de 30 minutos.
+            </p>
+            
+            <button class="btn btn-secondary" onclick="simulateFastForward(5 * 60)" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.2);">
+              ⏩ Adelantar 5 minutos (Prueba)
+            </button>
+            <button class="btn btn-secondary" onclick="simulateFastForward(55 * 60)" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.2);">
+              ⏩ Adelantar 55 minutos (Prueba)
+            </button>
+            
+            <button class="btn btn-secondary" onclick="terminateTicketEarly()" style="color: var(--error); border-color: var(--error); margin-top: 1rem;">
+              Liberar Cajón & Liquidar Escrow
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Active Telemetry UI (Circular Timer Component) -->
+      <div class="bento-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center;" id="rightCard">
+        <h2 class="card-title" style="text-transform: uppercase; letter-spacing: 1px; width: 100%; text-align: center;">
+          <span>⌛</span> Tiempo Remanente
+        </h2>
+        
+        <div class="timer-container">
+          <div class="timer-ring-wrapper">
+            <svg class="timer-svg">
+              <circle class="track" cx="140" cy="140" r="130"></circle>
+              <circle class="progress" id="timerProgress" cx="140" cy="140" r="130"></circle>
+            </svg>
+            <div class="timer-content">
+              <div class="timer-countdown" id="countdownDigits">00:00:00</div>
+              <div class="timer-label" id="timerSubtext">SIN TICKET</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align: center; color: var(--gray); font-size: 0.85rem; max-width: 300px; margin-top: 1rem;">
+          No cierres esta pestaña. Las alertas de infracción y grúa de CDMX se enviarán vía notificaciones del sistema.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bold Un-skippable Legal Compliance Card footer always visible at the bottom of the page -->
+    <div class="legal-card" style="margin-top: 3rem;">
+      <div class="legal-header">⚠️ AVISO DE RETIRO CON GRÚA (CDMX)</div>
+      <p class="legal-text">
+        DOCK es un software de gestión de espacios privados de mutuo acuerdo. Al confirmar su pago, el Driver acepta que el espacio contratado tiene una tolerancia máxima estricta de 10 minutos posteriores al vencimiento de su tiempo digital. Pasado este límite, el Docker queda legal y contractualmente facultado para solicitar una grúa privada o arrastre vehicular de la Ciudad de México para liberar el libre acceso a su propiedad. Cualquier costo de corralón o arrastre correrá al 100% por cuenta del Driver infractor. DOCK no se hace responsable por daños materiales.
+      </p>
+    </div>
+  </main>
+
+  <!-- Extender modal -->
+  <div class="details-popup" id="extendOverlay">
+    <div class="details-modal">
+      <h2 style="font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--neon); text-align: center; margin-bottom: 1.5rem;">
+        Extender Reserva
+      </h2>
+      <p class="card-desc" style="text-align: center;">Añade tiempo adicional a tu garantía escrow antes de la exclusión estricta de 30 minutos.</p>
+      
+      <div class="form-group">
+        <label class="form-label">Duración Extra</label>
+        <select class="form-input" id="extendDuration" onchange="calculateExtendPrice()">
+          <option value="1">1 Hora Adicional (+ $40 MXN)</option>
+          <option value="2">2 Horas Adicionales (+ $80 MXN)</option>
+          <option value="3">3 Horas Adicionales (+ $120 MXN)</option>
+        </select>
+      </div>
+
+      <div class="escrow-payment-box" style="margin-bottom: 2rem;">
+        <div class="escrow-title">Depósito Extra Requerido</div>
+        <div class="escrow-price" id="displayExtendPrice">MXN $40<span>.00</span></div>
+      </div>
+
+      <div style="display: flex; gap: 1rem;">
+        <button class="btn btn-secondary" onclick="closeExtendModal()" style="flex: 1;">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmExtend()" style="flex: 1;">Confirmar Depósito</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 DOCK Technologies. CDMX, México. Todos los derechos reservados.</p>
+  </footer>
+
+  <script>
+    let activeTicket = null;
+    let timerInterval = null;
+    
+    // Notification variables to prevent duplicates
+    let notified45 = false;
+    let notified0 = false;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      // Validate session
+      const user = localStorage.getItem("dock_user");
+      const role = localStorage.getItem("dock_role");
+      
+      if (!user || role !== 'driver') {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      document.getElementById('navUsername').innerText = `Driver: ${user}`;
+      
+      // Ask for Notifications permission
+      requestNotificationPermission();
+
+      // Check for active ticket
+      loadActiveTicket();
+      
+      calculatePrice();
+    });
+
+    function requestNotificationPermission() {
+      if ('Notification' in window) {
+        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+          Notification.requestPermission();
+        }
+      }
+    }
+
+    function calculatePrice() {
+      const duration = parseFloat(document.getElementById('parkingDuration').value);
+      const price = duration === 0.05 ? 12 : Math.round(duration * 40);
+      document.getElementById('displayEscrowPrice').innerHTML = `MXN $${price}<span>.00</span>`;
+    }
+
+    function calculateExtendPrice() {
+      const duration = parseFloat(document.getElementById('extendDuration').value);
+      const price = Math.round(duration * 40);
+      document.getElementById('displayExtendPrice').innerHTML = `MXN $${price}<span>.00</span>`;
+    }
+
+    function loadActiveTicket() {
+      const ticketJson = localStorage.getItem("dock_active_ticket");
+      if (ticketJson) {
+        activeTicket = JSON.parse(ticketJson);
+        showActiveState();
+      } else {
+        showInactiveState();
+      }
+    }
+
+    function showActiveState() {
+      document.getElementById('paymentHookSection').style.display = 'none';
+      document.getElementById('activeTicketSection').style.display = 'block';
+
+      document.getElementById('infoSpot').innerText = activeTicket.spotName;
+      document.getElementById('infoVehicle').innerText = activeTicket.vehiclePlate;
+      document.getElementById('infoEscrow').innerText = `MXN $${activeTicket.escrowAmount}.00 (EN GARANTÍA)`;
+      
+      const endTimeDate = new Date(activeTicket.endTime);
+      document.getElementById('infoEndTime').innerText = endTimeDate.toLocaleTimeString();
+
+      document.getElementById('timerSubtext').innerText = 'CONEXIÓN ACTIVA';
+
+      // Start ticker
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(tick, 1000);
+      tick(); // Immediate first tick
+    }
+
+    function showInactiveState() {
+      document.getElementById('paymentHookSection').style.display = 'block';
+      document.getElementById('activeTicketSection').style.display = 'none';
+      
+      document.getElementById('timerSubtext').innerText = 'SIN TICKET';
+      document.getElementById('countdownDigits').innerText = '00:00:00';
+      document.getElementById('timerProgress').style.strokeDashoffset = '0px';
+
+      // Reset styles to standard
+      document.getElementById('roleDot').className = 'badge-dot';
+      document.getElementById('roleDot').style.background = 'var(--neon)';
+      document.getElementById('roleDot').style.boxShadow = '0 0 8px var(--neon)';
+      document.getElementById('infoLegalState').innerText = 'PROTEGIDO';
+      document.getElementById('infoLegalState').style.color = 'var(--neon)';
+      
+      if (timerInterval) clearInterval(timerInterval);
+    }
+
+    function activateEscrow(e) {
+      e.preventDefault();
+      
+      const selectSpot = document.getElementById('parkingSpotSelect');
+      const spotName = selectSpot.options[selectSpot.selectedIndex].text;
+      const vehiclePlate = document.getElementById('vehiclePlate').value.trim();
+      const durationHours = parseFloat(document.getElementById('parkingDuration').value);
+      
+      const durationMs = durationHours * 60 * 60 * 1000;
+      const startTime = Date.now();
+      const endTime = startTime + durationMs;
+      const price = durationHours === 0.05 ? 12 : Math.round(durationHours * 40);
+
+      activeTicket = {
+        spotName: spotName,
+        vehiclePlate: vehiclePlate,
+        durationMs: durationMs,
+        startTime: startTime,
+        endTime: endTime,
+        escrowAmount: price
+      };
+
+      localStorage.setItem("dock_active_ticket", JSON.stringify(activeTicket));
+      
+      // Update docker live grid if sharing localStorage simulated spots
+      simulateDockerSpotOccupancy(spotName, vehiclePlate, startTime, endTime, durationMs, price);
+
+      notified45 = false;
+      notified0 = false;
+
+      showActiveState();
+    }
+
+    function tick() {
+      if (!activeTicket) return;
+
+      const now = Date.now();
+      const totalMs = activeTicket.durationMs;
+      const elapsedMs = now - activeTicket.startTime;
+      const remainingMs = activeTicket.endTime - now;
+
+      // Update Ring Progress (stroke-dasharray = 816.8)
+      const pct = Math.max(0, 1 - (elapsedMs / totalMs));
+      const dashoffset = 816.8 * (1 - pct);
+      document.getElementById('timerProgress').style.strokeDashoffset = `${dashoffset}px`;
+
+      // Update Extension Lock Logic: button expires exactly 30 minutes before the active ticket ends
+      const extendBtn = document.getElementById('btnExtender');
+      const warningText = document.getElementById('extendLockoutWarning');
+      const minutesRemaining = remainingMs / 60000;
+
+      if (minutesRemaining <= 30) {
+        extendBtn.disabled = true;
+        extendBtn.style.opacity = '0.3';
+        extendBtn.style.cursor = 'not-allowed';
+        warningText.style.display = 'block';
+      } else {
+        extendBtn.disabled = false;
+        extendBtn.style.opacity = '1';
+        extendBtn.style.cursor = 'pointer';
+        warningText.style.display = 'none';
+      }
+
+      // Check countdown digits
+      if (remainingMs > 0) {
+        const hours = Math.floor(remainingMs / 3600000);
+        const minutes = Math.floor((remainingMs % 3600000) / 60000);
+        const seconds = Math.floor((remainingMs % 60000) / 1000);
+        document.getElementById('countdownDigits').innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        
+        // Notifications Engine: Check if 45 mins remaining
+        // For simulation purposes (short durations like 3 minutes), trigger it if remaining time is 45 seconds or less
+        const thresholdMins = totalMs <= 5 * 60 * 1000 ? 0.75 : 45; // 45 seconds or 45 minutes
+        const minutesLeft = remainingMs / 60000;
+        
+        if (minutesLeft <= thresholdMins && !notified45) {
+          sendBrowserNotification("DOCK: Tiempo por caducar", "Tiempo por caducar. Extiende ya.");
+          notified45 = true;
+        }
+      } else {
+        // Ticket Expired (Infraction)
+        const overTimeMs = Math.abs(remainingMs);
+        const minutes = Math.floor(overTimeMs / 60000);
+        const seconds = Math.floor((overTimeMs % 60000) / 1000);
+        document.getElementById('countdownDigits').innerText = `+${pad(minutes)}:${pad(seconds)}`;
+        
+        // UI theme shift to RED for aggressive alert
+        document.getElementById('countdownDigits').style.color = 'var(--error)';
+        document.getElementById('timerProgress').style.stroke = 'var(--error)';
+        document.getElementById('timerProgress').style.filter = 'drop-shadow(0 0 8px rgba(255, 74, 74, 0.6))';
+        document.getElementById('roleDot').style.background = 'var(--error)';
+        document.getElementById('roleDot').style.boxShadow = '0 0 8px var(--error)';
+        document.getElementById('infoLegalState').innerText = '🚨 INFRACCIÓN ACTIVA';
+        document.getElementById('infoLegalState').style.color = 'var(--error)';
+        document.getElementById('timerSubtext').innerText = 'GRÚA CDMX SOLICITADA';
+        document.getElementById('timerSubtext').style.color = 'var(--error)';
+
+        if (!notified0) {
+          sendBrowserNotification("🚨 TIEMPO INFRACCIONADO", "🚨 PROTOCOLO DE GRÚA ACTIVADO.");
+          notified0 = true;
+        }
+      }
+    }
+
+    function sendBrowserNotification(title, bodyText) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, {
+          body: bodyText,
+          icon: 'https://imgur.com/uaVmfzb.png'
+        });
+      }
+    }
+
+    function openExtendModal() {
+      // Final confirmation checklist if they click Extender Tiempo
+      document.getElementById('extendOverlay').style.display = 'flex';
+      calculateExtendPrice();
+    }
+
+    function closeExtendModal() {
+      document.getElementById('extendOverlay').style.display = 'none';
+    }
+
+    function confirmExtend() {
+      if (!activeTicket) return;
+
+      const durationHours = parseFloat(document.getElementById('extendDuration').value);
+      const addedMs = durationHours * 60 * 60 * 1000;
+      const additionalCost = durationHours * 40;
+
+      activeTicket.durationMs += addedMs;
+      activeTicket.endTime += addedMs;
+      activeTicket.escrowAmount += additionalCost;
+
+      localStorage.setItem("dock_active_ticket", JSON.stringify(activeTicket));
+      
+      // Update shared state for docker dashboard simulation
+      syncDockerSpotExtend(activeTicket.spotName, activeTicket.endTime, activeTicket.durationMs, activeTicket.escrowAmount);
+
+      closeExtendModal();
+      showActiveState();
+      
+      // Reset notifications triggers for the new extension
+      notified45 = false;
+      notified0 = false;
+      document.getElementById('countdownDigits').style.color = 'var(--white)';
+      document.getElementById('timerProgress').style.stroke = 'var(--neon)';
+      document.getElementById('timerProgress').style.filter = 'drop-shadow(0 0 8px rgba(15, 255, 161, 0.5))';
+    }
+
+    function simulateFastForward(seconds) {
+      if (!activeTicket) return;
+      
+      // Subtract duration from starting time and end time to shift current time relative to ticket
+      activeTicket.startTime -= seconds * 1000;
+      activeTicket.endTime -= seconds * 1000;
+      
+      localStorage.setItem("dock_active_ticket", JSON.stringify(activeTicket));
+      syncDockerSpotTimeShift(activeTicket.spotName, activeTicket.startTime, activeTicket.endTime);
+      tick();
+    }
+
+    function terminateTicketEarly() {
+      if (confirm("¿Confirmas que has desocupado el portón y deseas liberar los fondos de garantía?")) {
+        // Find current spot and release it
+        releaseDockerSpot(activeTicket.spotName);
+        activeTicket = null;
+        localStorage.removeItem("dock_active_ticket");
+        showInactiveState();
+      }
+    }
+
+    // SIMULATED CROSS-DASHBOARD STATE SYNCHRONIZATION
+    function simulateDockerSpotOccupancy(spotName, vehicle, start, end, total, price) {
+      let spots = JSON.parse(localStorage.getItem("dock_spots_data") || "[]");
+      const spotNum = spotName.includes("#02") ? 2 : spotName.includes("#01") ? 1 : 3;
+      
+      // Find or create
+      let spotIdx = spots.findIndex(s => s.id === spotNum);
+      const spotObj = {
+        id: spotNum,
+        status: 'occupied',
+        driverName: localStorage.getItem("dock_user") || 'Driver Autenticado',
+        driverPhone: localStorage.getItem("dock_phone") || '55 0000 0000',
+        vehicleNickname: vehicle,
+        startTime: start,
+        endTime: end,
+        totalDurationMs: total,
+        escrowAmount: price
+      };
+
+      if (spotIdx !== -1) {
+        spots[spotIdx] = spotObj;
+      } else {
+        spots.push(spotObj);
+      }
+      localStorage.setItem("dock_spots_data", JSON.stringify(spots));
+    }
+
+    function syncDockerSpotExtend(spotName, newEnd, newTotal, newPrice) {
+      let spots = JSON.parse(localStorage.getItem("dock_spots_data") || "[]");
+      const spotNum = spotName.includes("#02") ? 2 : spotName.includes("#01") ? 1 : 3;
+      let spotIdx = spots.findIndex(s => s.id === spotNum);
+      if (spotIdx !== -1) {
+        spots[spotIdx].endTime = newEnd;
+        spots[spotIdx].totalDurationMs = newTotal;
+        spots[spotIdx].escrowAmount = newPrice;
+        localStorage.setItem("dock_spots_data", JSON.stringify(spots));
+      }
+    }
+
+    function syncDockerSpotTimeShift(spotName, newStart, newEnd) {
+      let spots = JSON.parse(localStorage.getItem("dock_spots_data") || "[]");
+      const spotNum = spotName.includes("#02") ? 2 : spotName.includes("#01") ? 1 : 3;
+      let spotIdx = spots.findIndex(s => s.id === spotNum);
+      if (spotIdx !== -1) {
+        spots[spotIdx].startTime = newStart;
+        spots[spotIdx].endTime = newEnd;
+        localStorage.setItem("dock_spots_data", JSON.stringify(spots));
+      }
+    }
+
+    function releaseDockerSpot(spotName) {
+      let spots = JSON.parse(localStorage.getItem("dock_spots_data") || "[]");
+      const spotNum = spotName.includes("#02") ? 2 : spotName.includes("#01") ? 1 : 3;
+      let spotIdx = spots.findIndex(s => s.id === spotNum);
+      if (spotIdx !== -1) {
+        spots[spotIdx] = { id: spotNum, status: 'vacant' };
+        localStorage.setItem("dock_spots_data", JSON.stringify(spots));
+      }
+    }
+
+    function pad(num) {
+      return num.toString().padStart(2, '0');
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
