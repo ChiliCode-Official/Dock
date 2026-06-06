@@ -9,11 +9,23 @@
   <meta name="description" content="Terminal de administración de cajones y portones DOCK.">
 </head>
 <body>
+  <!-- Firebase Database Status Banner -->
+  <div class="db-status-banner" id="dbStatusBanner">
+    📡 CONECTANDO CON FIREBASE...
+  </div>
+
   <header>
     <a href="index.html" class="logo-container">
       <img src="https://imgur.com/uaVmfzb.png" alt="DOCK Logo" class="logo-img">
       <span class="logo-text">DOCK<span>.</span></span>
     </a>
+    
+    <!-- Unified Dual-Role Switch Toggle in Header -->
+    <div class="role-switch-container">
+      <button class="role-switch-btn active" id="toggleDocker">Docker 🔑</button>
+      <button class="role-switch-btn" id="toggleDriver" onclick="switchRole('driver')">Driver 🚗</button>
+    </div>
+
     <div class="nav-user">
       <div class="user-badge">
         <span class="badge-dot"></span>
@@ -139,28 +151,54 @@
     <p>&copy; 2026 DOCK Technologies. CDMX, México. Todos los derechos reservados.</p>
   </footer>
 
-  <script>
-    // Validate session
-    document.addEventListener("DOMContentLoaded", () => {
-      const user = localStorage.getItem("dock_user");
-      const role = localStorage.getItem("dock_role");
-      
-      if (!user || role !== 'docker') {
-        window.location.href = 'index.html';
-        return;
+  <!-- Firebase Integration Script -->
+  <script type="module">
+    import { db } from "./firebase-config.js";
+    import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    let isMock = false;
+
+    // Validate Firebase connection
+    try {
+      if (!db || !db.app || db.app.options.apiKey === "YOUR_API_KEY_HERE") {
+        throw new Error("Mocking");
       }
-      
-      document.getElementById('navUsername').innerText = `Docker: ${user}`;
-      
-      // Load saved configurations or set defaults
+      document.getElementById('dbStatusBanner').innerText = "📡 CONECTADO A FIRESTORE (gowash-5e31a)";
+      document.getElementById('dbStatusBanner').style.background = "rgba(15, 255, 161, 0.1)";
+      document.getElementById('dbStatusBanner').style.color = "var(--neon)";
+      isMock = false;
+    } catch (err) {
+      isMock = true;
+      document.getElementById('dbStatusBanner').innerText = "⚡ MODO SIMULADOR LOCAL (LocalStorage fallback)";
+      document.getElementById('dbStatusBanner').className = "db-status-banner mock";
+    }
+
+    // Session Verification
+    const activePhone = localStorage.getItem("dock_phone");
+    const activeUsername = localStorage.getItem("dock_username");
+    const activeRole = localStorage.getItem("dock_role");
+
+    if (!activePhone || activeRole !== 'docker') {
+      window.location.href = 'index.html';
+    } else {
+      document.getElementById('navUsername').innerText = `Docker: ${activeUsername}`;
       initConfiguration();
-      
-      // Render layout
       renderGrid();
-      
-      // Start real-time clock tickers
       setInterval(updateTickers, 1000);
-    });
+    }
+
+    window.switchRole = function(newRole) {
+      localStorage.setItem("dock_role", newRole);
+      window.location.href = `${newRole}-dashboard.html`;
+    }
+
+    window.logout = function() {
+      localStorage.removeItem("dock_session");
+      localStorage.removeItem("dock_phone");
+      localStorage.removeItem("dock_username");
+      localStorage.removeItem("dock_role");
+      window.location.href = 'index.html';
+    }
 
     let config = {
       cajones: 4,
@@ -170,7 +208,7 @@
     };
 
     let spotsData = [];
-    let currentViewingSlotIndex = -1;
+    window.currentViewingSlotIndex = -1;
 
     function initConfiguration() {
       const savedConfig = localStorage.getItem("dock_spot_config");
@@ -178,8 +216,8 @@
         config = JSON.parse(savedConfig);
         document.getElementById('spotCajones').value = config.cajones;
         document.getElementById('spotMaxHoras').value = config.maxHoras;
-        document.getElementById('spotTarifaHora').value = config.spotTarifaHora || config.tarifaHora;
-        document.getElementById('spotTarifaFraccion').value = config.spotTarifaFraccion || config.tarifaFraccion;
+        document.getElementById('spotTarifaHora').value = config.tarifaHora;
+        document.getElementById('spotTarifaFraccion').value = config.tarifaFraccion;
       } else {
         localStorage.setItem("dock_spot_config", JSON.stringify(config));
       }
@@ -198,7 +236,6 @@
       const savedSpots = localStorage.getItem("dock_spots_data");
       if (savedSpots) {
         spotsData = JSON.parse(savedSpots);
-        // Sync number of cajones if config changed
         adjustSpotsLength();
       } else {
         generateDefaultSpots();
@@ -208,16 +245,14 @@
     function generateDefaultSpots() {
       spotsData = [];
       for (let i = 0; i < config.cajones; i++) {
-        // Mocking some occupied and some vacant
         if (i === 1) {
-          // Parking de LuisRo
           const durationMs = 2 * 60 * 60 * 1000; // 2 hours
           const startTime = Date.now() - (45 * 60 * 1000); // started 45 mins ago
           spotsData.push({
             id: i + 1,
             status: 'occupied',
             driverName: 'Luis Roberto',
-            driverPhone: '55 2381 9921',
+            driverPhone: '5523819921',
             vehicleNickname: 'Vento Negro (LuisRo)',
             startTime: startTime,
             endTime: startTime + durationMs,
@@ -249,7 +284,7 @@
       localStorage.setItem("dock_spots_data", JSON.stringify(spotsData));
     }
 
-    function saveSpotConfig(e) {
+    window.saveSpotConfig = function(e) {
       e.preventDefault();
       config.cajones = parseInt(document.getElementById('spotCajones').value);
       config.maxHoras = parseInt(document.getElementById('spotMaxHoras').value);
@@ -261,7 +296,7 @@
       renderGrid();
     }
 
-    function previewGateImage(event) {
+    window.previewGateImage = function(event) {
       const file = event.target.files[0];
       if (file) {
         const reader = new FileReader();
@@ -277,7 +312,7 @@
       }
     }
 
-    function renderGrid() {
+    window.renderGrid = function() {
       const grid = document.getElementById('telemetryGrid');
       grid.innerHTML = '';
 
@@ -293,8 +328,6 @@
             <div class="dial-label">SIN CONEXIÓN</div>
           `;
         } else {
-          // Circular progress math
-          // Total length of dash = 283 (radius=45, 2*PI*45 = 282.7)
           const now = Date.now();
           const elapsed = now - spot.startTime;
           const total = spot.totalDurationMs;
@@ -331,7 +364,6 @@
         const elapsedMs = now - spot.startTime;
         const remainingMs = spot.endTime - now;
 
-        // Display HH:MM:SS (standard countdown or infraction indicator)
         if (remainingMs > 0) {
           const hours = Math.floor(remainingMs / 3600000);
           const minutes = Math.floor((remainingMs % 3600000) / 60000);
@@ -339,7 +371,6 @@
           timeElem.innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
           timeElem.style.color = 'var(--neon)';
         } else {
-          // Infraction!
           const absOverMs = Math.abs(remainingMs);
           const minutes = Math.floor(absOverMs / 60000);
           const seconds = Math.floor((absOverMs % 60000) / 1000);
@@ -347,13 +378,10 @@
           timeElem.style.color = 'var(--error)';
         }
 
-        // Calculate accumulated cost
-        // Under escrow setup, driver paid upfront, but we can display live value
         const hoursElapsed = elapsedMs / 3600000;
         const calculatedCost = Math.round(hoursElapsed * config.tarifaHora);
         costElem.innerText = `MXN $${calculatedCost}.00`;
 
-        // Update progress wheel
         const total = spot.totalDurationMs;
         const percentLeft = Math.max(0, 1 - (elapsedMs / total));
         const dashoffset = 283 * (1 - percentLeft);
@@ -367,8 +395,8 @@
       return num.toString().padStart(2, '0');
     }
 
-    function showSpotDetails(idx) {
-      currentViewingSlotIndex = idx;
+    window.showSpotDetails = function(idx) {
+      window.currentViewingSlotIndex = idx;
       const spot = spotsData[idx];
 
       document.getElementById('detCajon').innerText = `#0${spot.id}`;
@@ -398,12 +426,12 @@
       document.getElementById('detailsOverlay').style.display = 'flex';
     }
 
-    function closeDetails() {
+    window.closeDetails = function() {
       document.getElementById('detailsOverlay').style.display = 'none';
-      currentViewingSlotIndex = -1;
+      window.currentViewingSlotIndex = -1;
     }
 
-    function releaseSpot(idx) {
+    window.releaseSpot = function(idx) {
       if (idx === -1) return;
       spotsData[idx] = {
         id: idx + 1,
@@ -414,11 +442,10 @@
       closeDetails();
     }
 
-    function simulateNewOccupancy() {
-      // Find first vacant spot
+    window.simulateNewOccupancy = function() {
       const vacantIdx = spotsData.findIndex(s => s.status === 'vacant');
       if (vacantIdx === -1) {
-        alert("Todos los cajones están llenos.");
+        alert("Todos los cajones están ocupados.");
         return;
       }
 
@@ -427,7 +454,7 @@
       
       const name = randomNames[Math.floor(Math.random() * randomNames.length)];
       const car = randomCars[Math.floor(Math.random() * randomCars.length)];
-      const durationHours = Math.floor(Math.random() * 3) + 1; // 1 to 3 hours
+      const durationHours = Math.floor(Math.random() * 3) + 1;
       const durationMs = durationHours * 60 * 60 * 1000;
       const startTime = Date.now();
 
@@ -435,7 +462,7 @@
         id: vacantIdx + 1,
         status: 'occupied',
         driverName: name,
-        driverPhone: '55 ' + Math.floor(10000000 + Math.random() * 90000000),
+        driverPhone: '55' + Math.floor(10000000 + Math.random() * 90000000),
         vehicleNickname: car,
         startTime: startTime,
         endTime: startTime + durationMs,
@@ -445,11 +472,6 @@
 
       saveSpotsData();
       renderGrid();
-    }
-
-    function logout() {
-      localStorage.clear();
-      window.location.href = 'index.html';
     }
   </script>
 </body>

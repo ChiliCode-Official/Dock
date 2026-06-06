@@ -9,11 +9,23 @@
   <meta name="description" content="Terminal de seguimiento y telemetría de estacionamiento DOCK.">
 </head>
 <body>
+  <!-- Firebase Database Status Banner -->
+  <div class="db-status-banner" id="dbStatusBanner">
+    📡 CONECTANDO CON FIREBASE...
+  </div>
+
   <header>
     <a href="index.html" class="logo-container">
       <img src="https://imgur.com/uaVmfzb.png" alt="DOCK Logo" class="logo-img">
       <span class="logo-text">DOCK<span>.</span></span>
     </a>
+    
+    <!-- Unified Dual-Role Switch Toggle in Header -->
+    <div class="role-switch-container">
+      <button class="role-switch-btn" id="toggleDocker" onclick="switchRole('docker')">Docker 🔑</button>
+      <button class="role-switch-btn active" id="toggleDriver">Driver 🚗</button>
+    </div>
+
     <div class="nav-user">
       <div class="user-badge">
         <span class="badge-dot" id="roleDot"></span>
@@ -155,7 +167,7 @@
 
     </div>
 
-    <!-- Bold Un-skippable Legal Compliance Card footer always visible at the bottom of the page -->
+    <!-- Bold Un-skippable Legal Compliance Card footer always visible -->
     <div class="legal-card" style="margin-top: 3rem;">
       <div class="legal-header">⚠️ AVISO DE RETIRO CON GRÚA (CDMX)</div>
       <p class="legal-text">
@@ -197,34 +209,59 @@
     <p>&copy; 2026 DOCK Technologies. CDMX, México. Todos los derechos reservados.</p>
   </footer>
 
-  <script>
+  <!-- Firebase Integration Script -->
+  <script type="module">
+    import { db } from "./firebase-config.js";
+    import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    let isMock = false;
+
+    // Validate Firebase connection
+    try {
+      if (!db || !db.app || db.app.options.apiKey === "YOUR_API_KEY_HERE") {
+        throw new Error("Mocking");
+      }
+      document.getElementById('dbStatusBanner').innerText = "📡 CONECTADO A FIRESTORE (gowash-5e31a)";
+      document.getElementById('dbStatusBanner').style.background = "rgba(15, 255, 161, 0.1)";
+      document.getElementById('dbStatusBanner').style.color = "var(--neon)";
+      isMock = false;
+    } catch (err) {
+      isMock = true;
+      document.getElementById('dbStatusBanner').innerText = "⚡ MODO SIMULADOR LOCAL (LocalStorage fallback)";
+      document.getElementById('dbStatusBanner').className = "db-status-banner mock";
+    }
+
+    // Session Verification
+    const activePhone = localStorage.getItem("dock_phone");
+    const activeUsername = localStorage.getItem("dock_username");
+    const activeRole = localStorage.getItem("dock_role");
+
+    if (!activePhone || activeRole !== 'driver') {
+      window.location.href = 'index.html';
+    } else {
+      document.getElementById('navUsername').innerText = `Driver: ${activeUsername}`;
+      requestNotificationPermission();
+      loadActiveTicket();
+      calculatePrice();
+    }
+
+    window.switchRole = function(newRole) {
+      localStorage.setItem("dock_role", newRole);
+      window.location.href = `${newRole}-dashboard.html`;
+    }
+
+    window.logout = function() {
+      localStorage.removeItem("dock_session");
+      localStorage.removeItem("dock_phone");
+      localStorage.removeItem("dock_username");
+      localStorage.removeItem("dock_role");
+      window.location.href = 'index.html';
+    }
+
     let activeTicket = null;
     let timerInterval = null;
-    
-    // Notification variables to prevent duplicates
     let notified45 = false;
     let notified0 = false;
-
-    document.addEventListener("DOMContentLoaded", () => {
-      // Validate session
-      const user = localStorage.getItem("dock_user");
-      const role = localStorage.getItem("dock_role");
-      
-      if (!user || role !== 'driver') {
-        window.location.href = 'index.html';
-        return;
-      }
-
-      document.getElementById('navUsername').innerText = `Driver: ${user}`;
-      
-      // Ask for Notifications permission
-      requestNotificationPermission();
-
-      // Check for active ticket
-      loadActiveTicket();
-      
-      calculatePrice();
-    });
 
     function requestNotificationPermission() {
       if ('Notification' in window) {
@@ -234,13 +271,13 @@
       }
     }
 
-    function calculatePrice() {
+    window.calculatePrice = function() {
       const duration = parseFloat(document.getElementById('parkingDuration').value);
       const price = duration === 0.05 ? 12 : Math.round(duration * 40);
       document.getElementById('displayEscrowPrice').innerHTML = `MXN $${price}<span>.00</span>`;
     }
 
-    function calculateExtendPrice() {
+    window.calculateExtendPrice = function() {
       const duration = parseFloat(document.getElementById('extendDuration').value);
       const price = Math.round(duration * 40);
       document.getElementById('displayExtendPrice').innerHTML = `MXN $${price}<span>.00</span>`;
@@ -269,10 +306,9 @@
 
       document.getElementById('timerSubtext').innerText = 'CONEXIÓN ACTIVA';
 
-      // Start ticker
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(tick, 1000);
-      tick(); // Immediate first tick
+      tick();
     }
 
     function showInactiveState() {
@@ -283,17 +319,20 @@
       document.getElementById('countdownDigits').innerText = '00:00:00';
       document.getElementById('timerProgress').style.strokeDashoffset = '0px';
 
-      // Reset styles to standard
       document.getElementById('roleDot').className = 'badge-dot';
       document.getElementById('roleDot').style.background = 'var(--neon)';
       document.getElementById('roleDot').style.boxShadow = '0 0 8px var(--neon)';
-      document.getElementById('infoLegalState').innerText = 'PROTEGIDO';
-      document.getElementById('infoLegalState').style.color = 'var(--neon)';
+      
+      const infoLegal = document.getElementById('infoLegalState');
+      if (infoLegal) {
+        infoLegal.innerText = 'PROTEGIDO';
+        infoLegal.style.color = 'var(--neon)';
+      }
       
       if (timerInterval) clearInterval(timerInterval);
     }
 
-    function activateEscrow(e) {
+    window.activateEscrow = function(e) {
       e.preventDefault();
       
       const selectSpot = document.getElementById('parkingSpotSelect');
@@ -316,13 +355,10 @@
       };
 
       localStorage.setItem("dock_active_ticket", JSON.stringify(activeTicket));
-      
-      // Update docker live grid if sharing localStorage simulated spots
       simulateDockerSpotOccupancy(spotName, vehiclePlate, startTime, endTime, durationMs, price);
 
       notified45 = false;
       notified0 = false;
-
       showActiveState();
     }
 
@@ -339,7 +375,6 @@
       const dashoffset = 816.8 * (1 - pct);
       document.getElementById('timerProgress').style.strokeDashoffset = `${dashoffset}px`;
 
-      // Update Extension Lock Logic: button expires exactly 30 minutes before the active ticket ends
       const extendBtn = document.getElementById('btnExtender');
       const warningText = document.getElementById('extendLockoutWarning');
       const minutesRemaining = remainingMs / 60000;
@@ -356,16 +391,13 @@
         warningText.style.display = 'none';
       }
 
-      // Check countdown digits
       if (remainingMs > 0) {
         const hours = Math.floor(remainingMs / 3600000);
         const minutes = Math.floor((remainingMs % 3600000) / 60000);
         const seconds = Math.floor((remainingMs % 60000) / 1000);
         document.getElementById('countdownDigits').innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
         
-        // Notifications Engine: Check if 45 mins remaining
-        // For simulation purposes (short durations like 3 minutes), trigger it if remaining time is 45 seconds or less
-        const thresholdMins = totalMs <= 5 * 60 * 1000 ? 0.75 : 45; // 45 seconds or 45 minutes
+        const thresholdMins = totalMs <= 5 * 60 * 1000 ? 0.75 : 45;
         const minutesLeft = remainingMs / 60000;
         
         if (minutesLeft <= thresholdMins && !notified45) {
@@ -373,13 +405,11 @@
           notified45 = true;
         }
       } else {
-        // Ticket Expired (Infraction)
         const overTimeMs = Math.abs(remainingMs);
         const minutes = Math.floor(overTimeMs / 60000);
         const seconds = Math.floor((overTimeMs % 60000) / 1000);
         document.getElementById('countdownDigits').innerText = `+${pad(minutes)}:${pad(seconds)}`;
         
-        // UI theme shift to RED for aggressive alert
         document.getElementById('countdownDigits').style.color = 'var(--error)';
         document.getElementById('timerProgress').style.stroke = 'var(--error)';
         document.getElementById('timerProgress').style.filter = 'drop-shadow(0 0 8px rgba(255, 74, 74, 0.6))';
@@ -406,17 +436,16 @@
       }
     }
 
-    function openExtendModal() {
-      // Final confirmation checklist if they click Extender Tiempo
+    window.openExtendModal = function() {
       document.getElementById('extendOverlay').style.display = 'flex';
       calculateExtendPrice();
     }
 
-    function closeExtendModal() {
+    window.closeExtendModal = function() {
       document.getElementById('extendOverlay').style.display = 'none';
     }
 
-    function confirmExtend() {
+    window.confirmExtend = function() {
       if (!activeTicket) return;
 
       const durationHours = parseFloat(document.getElementById('extendDuration').value);
@@ -428,14 +457,11 @@
       activeTicket.escrowAmount += additionalCost;
 
       localStorage.setItem("dock_active_ticket", JSON.stringify(activeTicket));
-      
-      // Update shared state for docker dashboard simulation
       syncDockerSpotExtend(activeTicket.spotName, activeTicket.endTime, activeTicket.durationMs, activeTicket.escrowAmount);
 
       closeExtendModal();
       showActiveState();
       
-      // Reset notifications triggers for the new extension
       notified45 = false;
       notified0 = false;
       document.getElementById('countdownDigits').style.color = 'var(--white)';
@@ -443,21 +469,17 @@
       document.getElementById('timerProgress').style.filter = 'drop-shadow(0 0 8px rgba(15, 255, 161, 0.5))';
     }
 
-    function simulateFastForward(seconds) {
+    window.simulateFastForward = function(seconds) {
       if (!activeTicket) return;
-      
-      // Subtract duration from starting time and end time to shift current time relative to ticket
       activeTicket.startTime -= seconds * 1000;
       activeTicket.endTime -= seconds * 1000;
-      
       localStorage.setItem("dock_active_ticket", JSON.stringify(activeTicket));
       syncDockerSpotTimeShift(activeTicket.spotName, activeTicket.startTime, activeTicket.endTime);
       tick();
     }
 
-    function terminateTicketEarly() {
+    window.terminateTicketEarly = function() {
       if (confirm("¿Confirmas que has desocupado el portón y deseas liberar los fondos de garantía?")) {
-        // Find current spot and release it
         releaseDockerSpot(activeTicket.spotName);
         activeTicket = null;
         localStorage.removeItem("dock_active_ticket");
@@ -465,18 +487,15 @@
       }
     }
 
-    // SIMULATED CROSS-DASHBOARD STATE SYNCHRONIZATION
     function simulateDockerSpotOccupancy(spotName, vehicle, start, end, total, price) {
       let spots = JSON.parse(localStorage.getItem("dock_spots_data") || "[]");
       const spotNum = spotName.includes("#02") ? 2 : spotName.includes("#01") ? 1 : 3;
-      
-      // Find or create
       let spotIdx = spots.findIndex(s => s.id === spotNum);
       const spotObj = {
         id: spotNum,
         status: 'occupied',
-        driverName: localStorage.getItem("dock_user") || 'Driver Autenticado',
-        driverPhone: localStorage.getItem("dock_phone") || '55 0000 0000',
+        driverName: localStorage.getItem("dock_username") || 'Driver Autenticado',
+        driverPhone: localStorage.getItem("dock_phone") || '5500000000',
         vehicleNickname: vehicle,
         startTime: start,
         endTime: end,
@@ -527,11 +546,6 @@
 
     function pad(num) {
       return num.toString().padStart(2, '0');
-    }
-
-    function logout() {
-      localStorage.clear();
-      window.location.href = 'index.html';
     }
   </script>
 </body>
