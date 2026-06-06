@@ -9,10 +9,6 @@
   <meta name="description" content="DOCK es la plataforma escrow de estacionamiento privado en la CDMX. Renta tu cochera o encuentra un lugar seguro al instante.">
 </head>
 <body>
-  <!-- Firebase Database Status Banner -->
-  <div class="db-status-banner" id="dbStatusBanner">
-    📡 CONECTANDO CON FIREBASE...
-  </div>
 
   <header>
     <a href="#" class="logo-container">
@@ -100,16 +96,15 @@
     import { db } from "./firebase-config.js";
     import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    let isMock = false;
+    let isMock = true;
 
-    // Test configuration values
+    // Check if real config keys exist
     try {
-      if (!db || !db.app || db.app.options.apiKey === "YOUR_API_KEY_HERE") {
-        throw new Error("No configured keys");
+      if (db && db.app && db.app.options.apiKey && db.app.options.apiKey !== "YOUR_API_KEY_HERE") {
+        isMock = false;
+      } else {
+        setupMockFirestore();
       }
-      document.getElementById('dbStatusBanner').innerText = "📡 CONECTADO A FIRESTORE (gowash-5e31a)";
-      document.getElementById('dbStatusBanner').style.background = "rgba(15, 255, 161, 0.1)";
-      document.getElementById('dbStatusBanner').style.color = "var(--neon)";
     } catch (err) {
       setupMockFirestore();
     }
@@ -117,8 +112,6 @@
     // --- FIRESTORE MOCK SYSTEM FOR LOCALHOST / GITHUB PAGES ---
     function setupMockFirestore() {
       isMock = true;
-      document.getElementById('dbStatusBanner').innerText = "⚡ MODO SIMULADOR LOCAL (LocalStorage fallback)";
-      document.getElementById('dbStatusBanner').className = "db-status-banner mock";
 
       // Mock DB methods matching modular Firestore SDK
       window.mockFirestore = {

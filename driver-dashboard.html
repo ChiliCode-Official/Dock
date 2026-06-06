@@ -9,10 +9,6 @@
   <meta name="description" content="Terminal de seguimiento y telemetría de estacionamiento DOCK.">
 </head>
 <body>
-  <!-- Firebase Database Status Banner -->
-  <div class="db-status-banner" id="dbStatusBanner">
-    📡 CONECTANDO CON FIREBASE...
-  </div>
 
   <header>
     <a href="index.html" class="logo-container">
@@ -127,16 +123,6 @@
               🔒 Extensión bloqueada: Faltan menos de 30 minutos.
             </p>
             
-            <button class="btn btn-secondary" onclick="simulateFastForward(5 * 60)" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.2);">
-              ⏩ Adelantar 5 minutos (Prueba)
-            </button>
-            <button class="btn btn-secondary" onclick="simulateFastForward(55 * 60)" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.2);">
-              ⏩ Adelantar 55 minutos (Prueba)
-            </button>
-            
-            <button class="btn btn-secondary" onclick="terminateTicketEarly()" style="color: var(--error); border-color: var(--error); margin-top: 1rem;">
-              Liberar Cajón & Liquidar Escrow
-            </button>
           </div>
         </div>
       </div>
@@ -214,21 +200,15 @@
     import { db } from "./firebase-config.js";
     import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    let isMock = false;
+    let isMock = true;
 
     // Validate Firebase connection
     try {
-      if (!db || !db.app || db.app.options.apiKey === "YOUR_API_KEY_HERE") {
-        throw new Error("Mocking");
+      if (db && db.app && db.app.options.apiKey && db.app.options.apiKey !== "YOUR_API_KEY_HERE") {
+        isMock = false;
       }
-      document.getElementById('dbStatusBanner').innerText = "📡 CONECTADO A FIRESTORE (gowash-5e31a)";
-      document.getElementById('dbStatusBanner').style.background = "rgba(15, 255, 161, 0.1)";
-      document.getElementById('dbStatusBanner').style.color = "var(--neon)";
-      isMock = false;
     } catch (err) {
       isMock = true;
-      document.getElementById('dbStatusBanner').innerText = "⚡ MODO SIMULADOR LOCAL (LocalStorage fallback)";
-      document.getElementById('dbStatusBanner').className = "db-status-banner mock";
     }
 
     // Session Verification
